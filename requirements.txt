@@ -1,0 +1,21 @@
+# python 3.8.*
+# --------------- important ---------------
+torch  # recommend 2.x
+# nvidia-pyindex
+# nvidia-tensorflow  # very tricky to install, but necessary
+# onnx
+# onnxscript
+# onnxruntime-gpu
+tf2onnx
+tensorrt
+# onnx-tensorrt
+# gym==0.21
+numpy==1.22.0
+transformers
+tensorboard>=2.9.1
+rich
+# --------------- for compatibliity ---------------
+six
+termcolor==1.1.0
+protobuf==3.20.0
+packaging==21.3
