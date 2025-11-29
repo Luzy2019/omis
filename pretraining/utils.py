@@ -13,16 +13,6 @@ from scipy.special import softmax
 import torch
 from torch import nn
 from torch.nn import functional as F
-# from overcooked_ai_py.mdp.actions import Action
-# from overcooked_ai_py.agents.agent import AgentFromPolicy
-# from overcooked_ai_py.utils import load_dict_from_txt, load_pickle
-# from overcooked_ai_py.mdp.overcooked_env import OvercookedEnv
-# from overcooked_ai_py.mdp.overcooked_mdp import OvercookedGridworld
-
-import lbforaging
-
-# from multiagent.scenarios.simple_tag import Scenario
-# from multiagent.environment import MultiAgentEnv
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)s: %(message)s',
@@ -43,6 +33,7 @@ test_opponent_index = [
     (s, idx) for idx in opponent_population_agent_index for s in opponent_population_seed[2:4]
 ]
 
+print(train_opponent_index)
 
 my_index_dict = {
     "oc": [0],
@@ -522,7 +513,7 @@ def get_prompt(prompt_dataset, args):
                 timesteps[idx].append(np.arange(si, si + o[idx][-1].shape[1]).reshape(1, -1))
                 timesteps[idx][-1][timesteps[idx][-1] >= max_steps] = max_steps - 1  # padding cutoff
 
-                tlen = o[idx][-1].shape[1]
+                tlen = o[idx][-1].shape[1] # timestep length
 
                 o[idx][-1] = np.concatenate([np.zeros((1, max_len - tlen, *oppo_obs_dim)), o[idx][-1]], axis=1)
                 a[idx][-1] = np.concatenate([np.ones((1, max_len - tlen, act_dim)) * -10., a[idx][-1]], axis=1)
@@ -915,6 +906,7 @@ def run_agents(env, env_type, agent_group, agent_idx, include_final_state):
 
 
 def get_rollouts(env, env_type, agent_group, num_games, agent_idx, final_state=False):
+    
     trajectories = {
         # With shape (n_timesteps, game_len), where game_len might vary across games:
         "ep_observations": [],

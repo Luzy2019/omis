@@ -36,6 +36,7 @@ def main(args):
     set_global_seed(args.seed, with_tf=False)
     
     # * initialize the envs
+    # "pbt" 是 "Population Based Training"（基于种群的训练）的缩写
     pbt_save_dir = PBT_DATA_DIR[args.env_type] + pbt_model_paths[args.env_type] + "/"
     pbt_config = load_dict_from_txt(pbt_save_dir + "config")
     if args.env_type == "oc":

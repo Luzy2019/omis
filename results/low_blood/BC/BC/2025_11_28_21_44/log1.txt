@@ -1,0 +1,12 @@
+bufferSize=1000000
+criticLR=0.0001
+actorLR=0.0001
+batchSize=128
+maxStep=3800
+validationStep=3800
+hiddenLayer1=64
+hiddenLayer2=128
+agent=<bc.Agent object at 0x0000020AC4BF6CA0>
+model_dir=results/low_blood/BC/BC/2025_11_28_21_44\model
+hirl_type=soft
+data_dir=data_collection/data/low_blood/

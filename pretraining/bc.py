@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import torchvision.transforms as T
+# import torchvision.transforms as T
 import numpy as np
 from pretraining.buffer import *
 
@@ -22,7 +22,7 @@ class Critic(nn.Module):
         
         self.layerNorm = layerNorm
         #Q1
-        self.full1 = nn.Linear(stateDim+nActions, full1Dim)
+        self.full1 = nn.Linear(stateDim + nActions, full1Dim)
         nn.init.kaiming_uniform_(self.full1.weight, a= 0.01, mode='fan_in', nonlinearity='leaky_relu')
         
         self.layernorm1 = nn.LayerNorm(full1Dim)
@@ -35,7 +35,7 @@ class Critic(nn.Module):
         self.final1 = nn.Linear(full2Dim,1)
         
         #Q2
-        self.full3 = nn.Linear(stateDim+nActions, full1Dim)
+        self.full3 = nn.Linear(stateDim + nActions, full1Dim)
         nn.init.kaiming_uniform_(self.full3.weight, a= 0.01, mode='fan_in', nonlinearity='leaky_relu')
         
         self.layernorm3 = nn.LayerNorm(full1Dim)
@@ -82,9 +82,7 @@ class Critic(nn.Module):
     def onlyQ1(self,state,action):
         
         stateaction = torch.cat([state,action],1)
-        
         if self.layerNorm:
-            
             Q1 = F.leaky_relu(self.layernorm1(self.full1(stateaction)))
             Q1 = F.leaky_relu(self.layernorm2(self.full2(Q1)))        
             Q1 = self.final1(Q1)
@@ -127,15 +125,12 @@ class Actor(nn.Module):
 
     def forward(self,x):
         if self.layerNorm:
-            
             x = F.leaky_relu(self.layernorm1(self.full1(x)))
             x = F.leaky_relu(self.layernorm2(self.full2(x)))
 
         else:
-            
             x = F.leaky_relu(self.full1(x))
             x = F.leaky_relu(self.full2(x))
-
         
         return torch.tanh(self.final(x))
     
@@ -147,29 +142,37 @@ class Actor(nn.Module):
 
 class Agent:
     def __init__(self, actorLR, stateDim, actionDim, full1Dim, full2Dim, layerNorm, name, batchsize, expert_states, expert_actions):
+        # 初始化Actor网络
         self.actor = Actor(actorLR, stateDim, actionDim, full1Dim, full2Dim, layerNorm, name)
         self.batchsize = batchsize
+        # 专家状态和动作数据
         self.expert_states = expert_states
         self.expert_actions = expert_actions
+        # 查找需要上采样的索引
         self.target_indices = self.upsample_expert_data(self.expert_actions)
-
+        # 是否进行上采样
         self.expert_upsample = False
 
     def upsample_expert_data(self, BCActions):
+        # 返回动作序列中第四维为1的位置索引
         target_indices = np.where(BCActions[:, 3] == 1)[0]
         return target_indices 
 
     def train_actor(self):
+        # 启用训练模式
         self.actor.train()
 
+        # 将专家状态和动作转换为float类型的Torch张量，搬到device上
         BCStates = torch.tensor(np.array(self.expert_states), dtype=torch.float).to(self.actor.device)
         BCActions = torch.tensor(np.array(self.expert_actions), dtype=torch.float).to(self.actor.device)
 
-        samples_num = BCStates.shape[0]
+        samples_num = BCStates.shape[0]  # 样本数量
+        # 随机采样batchsize个索引，组成训练batch
         batch_indices = np.random.choice(samples_num, self.batchsize, replace=False)
         BCbatchState = BCStates[batch_indices]
         BCbatchAction = BCActions[batch_indices]
 
+        # 如果需要上采样，则随机从target_indices采样一个条目替换batch中的一个
         if self.expert_upsample:
             print(f"upsample num is {len(self.target_indices)}")
             selected_target_indices = np.random.choice(self.target_indices)
@@ -177,13 +180,17 @@ class Agent:
             BCbatchState[replace_index] = BCStates[selected_target_indices]
             BCbatchAction[replace_index] = BCActions[selected_target_indices]
 
+        # 计算网络输出
         BCnextAction = self.actor(BCbatchState)
+        # MSE损失
         self.bc_loss = F.mse_loss(BCnextAction, BCbatchAction)
 
+        # 反向传播
         self.actor.optimizer.zero_grad()
         self.bc_loss.backward()
         self.actor.optimizer.step()
 
+        # 返回损失
         return self.bc_loss.cpu().detach().numpy()
 
     def saveCheckpoints(self, ajan, model_name):

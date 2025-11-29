@@ -24,19 +24,23 @@ def main(args):
     with open(f"test_seq/{args.test_mode}_oppo_switch_{args.switch_interval}.npy", 'rb') as f:
         test_oppo_seq = np.load(f)
         args.test_oppo_seq = test_oppo_seq
+        
     # * set the result dir
     exp_name = f'{args.env_type}/{args.test_mode}/switch_{args.switch_interval}'
     seed_path = f"{exp_name}/ours-{args.exp_id}/seed{args.seed}/"
     args.seed_result_dir = args.result_dir + seed_path
     create_dir_if_not_exists(args.seed_result_dir)
     args.seed_result_path = args.seed_result_dir + "returns.csv"
+
     with open(args.seed_result_path, 'w') as f:
         f.write("episode,oppo_pi_idx,return\n")
+
     # * initialize the model
     if args.load_model_path == "":
         base_dir = "../pretraining/models/sl/"
         args.load_model_path = base_dir + f"{args.env_type}/ours-{args.load_exp_id}/seed{args.seed}/model_iter_{args.load_iter}"
     my_model = get_my_trt_model(args)
+
     if args.env_type == "oc":
         fake_env = env_and_oppo["env"].copy()
     elif args.env_type == "lbf":

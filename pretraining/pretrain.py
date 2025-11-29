@@ -22,6 +22,7 @@ def main(args):
     args.seed_loss_path = args.seed_result_dir + "loss.csv"
     with open(args.seed_loss_path, 'w') as f:
         f.write("train_step,action_loss,value_loss,oppo_pi_loss\n")
+
     # * load the dataset
     dataset = load_dataset(args)
     prompt_dataset = load_dataset(args, prompt=True)
@@ -31,7 +32,6 @@ def main(args):
     # * initialize the model
     model = GPTModel(args=args)
     model = model.to(device=args.device)
-
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda steps: min((steps + 1) / args.warmup_steps, 1))
     # * initialize the trainer

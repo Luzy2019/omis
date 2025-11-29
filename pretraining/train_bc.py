@@ -7,8 +7,8 @@ from myutils.data_processor import read_data
 from myutils.buffer import *
 from myutils.seed import *
 
-from envs.HarfangEnv_GYM.HarfangEnv_GYM import *
-import envs.HarfangEnv_GYM.dogfight_client as df
+# from envs.HarfangEnv_GYM.HarfangEnv_GYM import *
+# import envs.HarfangEnv_GYM.dogfight_client as df
 
 import numpy as np
 import time
@@ -19,9 +19,10 @@ import datetime
 import csv
 import argparse
 import yaml
+import torch
 from torch.utils.tensorboard import SummaryWriter
 
-def validate(validationEpisodes, env:HarfangEnv, validationStep, agent, plot, plot_dir, arttir, model_dir, episode, checkpointRate, tensor_writer:SummaryWriter, highScore, successRate, if_random):          
+def validate(validationEpisodes, env, validationStep, agent, plot, plot_dir, arttir, model_dir, episode, checkpointRate, tensor_writer:SummaryWriter, highScore, successRate, if_random):          
     success = 0
     fire_success = 0
     valScores = []
@@ -72,7 +73,6 @@ def validate(validationEpisodes, env:HarfangEnv, validationStep, agent, plot, pl
         if plot:
             plot_3d_trajectories(self_pos, oppo_pos, fire, lock, plot_dir, f'trajectories_{arttir}.png') 
             plot_distance(distance, lock, missile, fire, plot_dir, f'distance_{arttir}.png')
-            
             os.makedirs(plot_dir+'/csv', exist_ok=True)
             with open(plot_dir+'/csv/self_pos{}.csv'.format(arttir), 'w', newline='') as file:
                 csv_writer = csv.writer(file)
@@ -115,7 +115,7 @@ def main(config):
 
     agent_name = config.agent
     # port = config.port
-    # hirl_type = config.type
+    hirl_type = config.type
     # bc_weight = config.bc_weight
     model_name = config.model_name
     load_model = config.load_model
@@ -143,20 +143,14 @@ def main(config):
     with open('local_config.yaml', 'r') as file:
         local_config = yaml.safe_load(file)
 
-    if local_config['network']['ip'] == 'YOUR_IP_ADDRESS':
-        raise ValueError("Please update the 'network.ip' field in config.yaml with your own IP address.")
-
-    # df.connect(local_config["network"]["ip"], port)
-
     start = time.time() #STARTING TIME
-    # df.disable_log()
 
     name = "Harfang_GYM"
 
     # PARAMETERS
     if env_type == "straight_line":
         print("env is harfang straight line")
-        trainingEpisodes = 6000
+        trainingEpisodes = 2000
         validationEpisodes = 50 # 20
         explorationEpisodes = 20 # 200
         maxStep = 1500 # 6000
@@ -166,7 +160,7 @@ def main(config):
 
     elif env_type == "serpentine":
         print("env is harfang serpentine")
-        trainingEpisodes = 6000
+        trainingEpisodes = 2000
         validationEpisodes = 50 # 20
         explorationEpisodes = 20 # 200
         maxStep = 1500 # 6000
@@ -176,7 +170,7 @@ def main(config):
 
     elif env_type == "circular":
         print("env is harfang circular")
-        trainingEpisodes = 6000
+        trainingEpisodes = 2000
         validationEpisodes = 50 # 20
         explorationEpisodes = 20 # 200
         maxStep = 1900 # 6000
@@ -186,7 +180,7 @@ def main(config):
 
     elif env_type == "low_blood":
         print("env is harfang low blood")
-        trainingEpisodes = 6000
+        trainingEpisodes = 2000
         validationEpisodes = 50 # 20
         explorationEpisodes = 20 # 200
         maxStep = 3800 # 6000
@@ -196,7 +190,7 @@ def main(config):
 
     elif env_type == "normal_blood":
         print("env is harfang normal blood")
-        trainingEpisodes = 6000
+        trainingEpisodes = 2000
         validationEpisodes = 50 # 20
         explorationEpisodes = 20 # 200
         maxStep = 3800 # 6000
@@ -211,7 +205,7 @@ def main(config):
     # df.set_renderless_mode(render)
     # df.set_client_update_mode(True)
 
-    bufferSize = 10**5 # 10**6
+    bufferSize = 10**6 # 10**6
     gamma = 0.99
     criticLR = 1e-4
     actorLR = 1e-4
@@ -220,7 +214,7 @@ def main(config):
     logRate = 300
     highScore = -math.inf
     successRate = 0
-    batchSize = 16 # 128
+    batchSize = 128 # 128
     hiddenLayer1 = 64
     hiddenLayer2 = 128
     stateDim = 13
@@ -231,8 +225,9 @@ def main(config):
     # bc_warm_up = False
     # bc_warm_up_weight = 0 # 不能动
 
-    if if_random: data_dir = f'expert_data/{env_type}/expert_data_ai_random.csv'
-    elif not if_random: data_dir = f'expert_data/{env_type}/expert_data_ai.csv'
+    # if if_random: data_dir = f'expert_data/{env_type}/expert_data_ai_random.csv'
+    # elif not if_random: data_dir = f'expert_data/{env_type}/expert_data_ai.csv'
+    data_dir = "data_collection/data/low_blood/"
 
     start_time = datetime.datetime.now()
     log_dir = local_config["experiment"]["result_dir"] + "/" + env_type + "/" + agent_name + "/" + model_name + "/" + str(start_time.year)+'_'+str(start_time.month)+'_'+str(start_time.day)+'_'+str(start_time.hour)+'_'+str(start_time.minute)
@@ -247,7 +242,7 @@ def main(config):
         expert_states, expert_actions = read_data(data_dir)
         agent = BCAgent(actorLR, stateDim, actionDim, hiddenLayer1, hiddenLayer2, useLayerNorm, name, batchSize, expert_states, expert_actions)
 
-    # save_parameters_to_txt(log_dir=log_dir,bufferSize=bufferSize,criticLR=criticLR,actorLR=actorLR,batchSize=batchSize,maxStep=maxStep,validationStep=validationStep,hiddenLayer1=hiddenLayer1,hiddenLayer2=hiddenLayer2,agent=agent,model_dir=model_dir,hirl_type=hirl_type, data_dir=data_dir)
+    save_parameters_to_txt(log_dir=log_dir,bufferSize=bufferSize,criticLR=criticLR,actorLR=actorLR,batchSize=batchSize,maxStep=maxStep,validationStep=validationStep,hiddenLayer1=hiddenLayer1,hiddenLayer2=hiddenLayer2,agent=agent,model_dir=model_dir,hirl_type=hirl_type, data_dir=data_dir)
     # env.save_parameters_to_txt(log_dir)
 
     writer = SummaryWriter(summary_dir)
@@ -258,29 +253,34 @@ def main(config):
 
     # only bc
     for episode in range(trainingEpisodes):
+        bc_loss_list = []
         for step in range(maxStep):
             bc_loss = agent.train_actor()
+            bc_loss_list.append(bc_loss)
             if step == 1000:
                 writer.add_scalar('Loss/BC_Loss', bc_loss, step + episode * maxStep)
+                print('====>Loss/BC_Loss', bc_loss, step + episode * maxStep)
         now = time.time()
         seconds = int((now - start) % 60)
         minutes = int(((now - start) // 60) % 60)
         hours = int((now - start) // 3600)
+        print('Average BC_Loss: ', sum(bc_loss_list) / len(bc_loss_list))
         print('Episode: ', episode+1, 'RunTime: ', hours, ':',minutes,':', seconds)
 
         # validation
-        # if ((episode + 1) % checkpointRate == 0 and (episode + 1) >= 1000):
-        #     highScore, successRate = validate(validationEpisodes, env, validationStep, agent, plot, plot_dir, arttir, model_dir, episode, checkpointRate, writer, highScore, successRate, if_random)
-        #     arttir += 1
+        if ((episode + 1) % checkpointRate == 0):
+            agent.saveCheckpoints("Agent{}_{}_{}_".format(arttir, round(sum(bc_loss_list)), round(sum(bc_loss_list) / len(bc_loss_list))), model_dir)
+            # highScore, successRate = validate(validationEpisodes, None, validationStep, agent, plot, plot_dir, arttir, model_dir, episode, checkpointRate, writer, highScore, successRate, if_random)
+            arttir += 1
     
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--agent', type=str, default='BC', 
+    parser.add_argument('--agent', type=str, default='BC',
                         help="Specify the agent to use: 'HIRL', 'BC' or 'TD3'. Default is 'HIRL'.")
     # parser.add_argument('--port', type=int, default=None,
     #                     help="The port number for the training environment. Example: 12345.")
-    # parser.add_argument('--type', type=str, default='soft',
-    #                     help="Type of HIRL algorithm to use: 'linear', 'fixed', or 'soft'. Default is 'soft'.")
+    parser.add_argument('--type', type=str, default='soft',
+                        help="Type of HIRL algorithm to use: 'linear', 'fixed', or 'soft'. Default is 'soft'.")
     # parser.add_argument('--bc_weight', type=float, default=0.5,
     #                     help="Weight for the behavior cloning (BC) loss. Default is 0.5.")
     parser.add_argument('--model_name', type=str, default='BC',
@@ -299,4 +299,4 @@ if __name__=='__main__':
                         help="Flag to use random initialization in the environment. Default is True (random).")
     main(parser.parse_args())
 
-    # python pretraining/train_bc.py --env serpentine --random --plot
+    # python pretraining/train_bc.py --env low_blood --agent BC

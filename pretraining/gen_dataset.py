@@ -41,6 +41,7 @@ def main(args):
     # * initialize the envs
     pbt_save_dir = PBT_DATA_DIR[args.env_type] + pbt_model_paths[args.env_type] + "/"
     pbt_config = load_dict_from_txt(pbt_save_dir + "config")
+    
     if args.env_type == "oc":
         mdp = OvercookedGridworld.from_layout_name(**oc_env_params["mdp_params"])
         env = OvercookedEnv(mdp, **oc_env_params["env_params"])
