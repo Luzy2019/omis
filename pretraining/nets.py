@@ -30,7 +30,12 @@ class GPTModel(nn.Module):
         self.oppo_idxs = opponent_index_dict[args.env_type]
         self.argsorted_oppo_idxs = np.argsort(self.oppo_idxs).tolist()
         self.my_idxs = my_index_dict[args.env_type]
-        max_ep_len = (horizon_per_ep_dict[args.env_type] + 20)
+
+        if self.args.env_type == "Harfang":
+            max_ep_len = (horizon_per_ep_dict[args.env_type])
+        else:
+            max_ep_len = (horizon_per_ep_dict[args.env_type] + 20)
+
         self.embed_timestep = nn.Embedding(max_ep_len, self.hidden_size)
         self.embed_return = torch.nn.Linear(1, self.hidden_size)
         if self.args.env_type == "oc":
@@ -48,7 +53,7 @@ class GPTModel(nn.Module):
                 nn.LeakyReLU(),
                 nn.Linear(self.hidden_size, self.hidden_size),
             )
-        elif self.args.env_type in ["lbf", "pp"]:
+        elif self.args.env_type in ["lbf", "pp", "Harfang"]:
             self.embed_state = nn.Sequential(
                 nn.Linear(*self.obs_dim, self.hidden_size),
                 nn.LeakyReLU(),
@@ -56,18 +61,22 @@ class GPTModel(nn.Module):
                 nn.LeakyReLU(),
                 nn.Linear(self.hidden_size, self.hidden_size),
             )
+
         self.embed_action = torch.nn.Linear(self.act_dim, self.hidden_size)
-        
-        if self.args.env_type in ["oc", "lbf"]:
+        if self.args.env_type in ["oc", "lbf", "Harfang"]:
             self.embed_oppo_action = torch.nn.Linear(self.act_dim, self.hidden_size)
         elif self.args.env_type == "pp":
             self.embed_oppo_action0 = torch.nn.Linear(self.act_dim, self.hidden_size)
             self.embed_oppo_action1 = torch.nn.Linear(self.act_dim, self.hidden_size)
             self.embed_oppo_action2 = torch.nn.Linear(self.act_dim, self.hidden_size)
         
-        self.embed_agent_idx = nn.Embedding(len(self.oppo_idxs)+len(self.my_idxs)+2, self.hidden_size)
+        if self.args.env_type == "Harfang":
+            self.embed_agent_idx = nn.Embedding(len(self.oppo_idxs)+len(self.my_idxs)+2, self.hidden_size)
+        else:
+            self.embed_agent_idx = nn.Embedding(len(self.oppo_idxs)+len(self.my_idxs)+2, self.hidden_size)
         
         self.prompt_embed_timestep = nn.Embedding(max_ep_len, self.hidden_size)
+
         if self.args.env_type == "oc":
             self.prompt_embed_state = torch.nn.Sequential(
                 nn.Conv2d(self.oppo_obs_dim[-1], 25, 5, 1, "same"),
@@ -113,8 +122,16 @@ class GPTModel(nn.Module):
                 nn.LeakyReLU(),
                 nn.Linear(self.hidden_size, self.hidden_size),
             )
-        
-        if self.args.env_type in ["oc", "lbf"]:
+        elif self.args.env_type == "Harfang":
+            self.prompt_embed_state = nn.Sequential(
+                nn.Linear(*self.oppo_obs_dim, self.hidden_size),
+                nn.LeakyReLU(),
+                nn.Linear(self.hidden_size, self.hidden_size),
+                nn.LeakyReLU(),
+                nn.Linear(self.hidden_size, self.hidden_size),
+            )
+
+        if self.args.env_type in ["oc", "lbf", "Harfang"]:
             self.prompt_embed_action = torch.nn.Linear(self.act_dim, self.hidden_size)
         elif self.args.env_type == "pp":
             self.prompt_embed_action0 = torch.nn.Linear(self.act_dim, self.hidden_size)
@@ -122,12 +139,11 @@ class GPTModel(nn.Module):
             self.prompt_embed_action2 = torch.nn.Linear(self.act_dim, self.hidden_size)
 
         self.embed_ln = nn.LayerNorm(self.hidden_size)
-
         self.predict_action = nn.Sequential(
             *([nn.Linear(self.hidden_size, self.act_dim)] + ([nn.Tanh()] if args.action_tanh else []))
         )
         self.predict_value = torch.nn.Linear(self.hidden_size, 1)
-        if self.args.env_type in ["oc", "lbf"]:
+        if self.args.env_type in ["oc", "lbf", "Harfang"]:
             self.predict_oppo_action = nn.Sequential(
                 *([nn.Linear(self.hidden_size, self.act_dim)] + ([nn.Tanh()] if args.action_tanh else []))
             )
@@ -149,17 +165,17 @@ class GPTModel(nn.Module):
         if self.args.env_type == "oc":
             obs = obs.permute(0, 1, 4, 2, 3).reshape(-1, self.obs_dim[-1], self.obs_dim[0], self.obs_dim[1])
             state_embeddings = self.embed_state(obs).reshape(batch_size, seq_length, self.hidden_size)
-        elif self.args.env_type in ["lbf", "pp"]:
+        elif self.args.env_type in ["lbf", "pp", "Harfang"]:
             state_embeddings = self.embed_state(obs)
         action_embeddings = self.embed_action(actions)
         
-        if self.args.env_type in ["oc", "lbf"]:
+        if self.args.env_type in ["oc", "lbf", "Harfang"]:
             oppo_action_embeddings = self.embed_oppo_action(oppo_actions[0])
         elif self.args.env_type == "pp":
             oppo_action_embeddings0 = self.embed_oppo_action0(oppo_actions[0])
             oppo_action_embeddings1 = self.embed_oppo_action1(oppo_actions[1])
             oppo_action_embeddings2 = self.embed_oppo_action2(oppo_actions[2])
-        
+
         returns_embeddings = self.embed_return(returns_to_go)
         time_embeddings = self.embed_timestep(timesteps)
         my_idx_input = torch.ones(batch_size, seq_length, dtype=torch.long, device=obs.device) * self.my_idxs[0]
@@ -183,7 +199,11 @@ class GPTModel(nn.Module):
             oppo_idx_input2 = torch.ones(batch_size, seq_length, dtype=torch.long, device=obs.device) * self.oppo_idxs[self.argsorted_oppo_idxs[2]]
             oppo_idx_embeddings2 = self.embed_agent_idx(oppo_idx_input2)
             oppo_action_embeddings2 = oppo_action_embeddings2 + time_embeddings + oppo_idx_embeddings2
-        
+        elif self.args.env_type == "Harfang":
+            oppo_idx_input = torch.ones(batch_size, seq_length, dtype=torch.long, device=obs.device) * self.oppo_idxs[0]
+            oppo_idx_embeddings = self.embed_agent_idx(oppo_idx_input)
+            oppo_action_embeddings = oppo_action_embeddings + time_embeddings + oppo_idx_embeddings
+            
         returns_embeddings = returns_embeddings + time_embeddings
         
         if self.args.env_type in ["oc", "lbf"]:
@@ -194,16 +214,18 @@ class GPTModel(nn.Module):
             stacked_inputs = torch.stack(
                 (state_embeddings, action_embeddings, oppo_action_embeddings0, oppo_action_embeddings1, oppo_action_embeddings2, returns_embeddings), dim=1
             ).permute(0, 2, 1, 3).reshape(batch_size, (3+len(self.oppo_idxs))*seq_length, self.hidden_size)
-        
-        stacked_inputs = self.embed_ln(stacked_inputs)
+        elif self.args.env_type == "Harfang":
+            stacked_inputs = torch.stack(
+                (state_embeddings, action_embeddings, oppo_action_embeddings, returns_embeddings), dim=1
+            ).permute(0, 2, 1, 3).reshape(batch_size, (3+len(self.oppo_idxs))*seq_length, self.hidden_size)
 
+        stacked_inputs = self.embed_ln(stacked_inputs)
         # to make the attention mask fit the stacked inputs, have to stack it as well
         stacked_attention_mask = torch.stack(
             (attention_mask, attention_mask, *[attention_mask for _ in range(len(self.oppo_idxs))], attention_mask), dim=1
         ).permute(0, 2, 1).reshape(batch_size, (3+len(self.oppo_idxs))*seq_length)
         
-        
-        if self.args.env_type in ["oc", "lbf"]:
+        if self.args.env_type in ["oc", "lbf", "Harfang"]:
             prompt_seq_length = prompt_states[0].shape[1]
             if self.args.env_type == "oc":
                 prompt_states_ = prompt_states[0].permute(0, 1, 4, 2, 3).reshape(-1, self.oppo_obs_dim[-1], self.oppo_obs_dim[0], self.oppo_obs_dim[1])
@@ -287,7 +309,10 @@ class GPTModel(nn.Module):
         elif self.args.env_type == "pp":
             stacked_inputs = torch.cat((prompt_stacked_inputs0, prompt_stacked_inputs1, prompt_stacked_inputs2, stacked_inputs), dim=1)
             stacked_attention_mask = torch.cat((prompt_stacked_attention_mask0, prompt_stacked_attention_mask1, prompt_stacked_attention_mask2, stacked_attention_mask), dim=1)
-        
+        elif self.args.env_type == "Harfang":
+            stacked_inputs = torch.cat((prompt_stacked_inputs, stacked_inputs), dim=1)
+            stacked_attention_mask = torch.cat((prompt_stacked_attention_mask, stacked_attention_mask), dim=1)
+
         # we feed in the input embeddings (not word indices as in NLP) to the model
         transformer_outputs = self.gpt_decoder(
             inputs_embeds=stacked_inputs,
@@ -300,8 +325,8 @@ class GPTModel(nn.Module):
 
         # note here all the prompt are pre-append to x, but when return only return the last [:, -seq_length:, :] corresponding to batch data
         # get predictions
-        value_preds = self.predict_value(x[:,0])[:, -seq_length:, :]  # predict value given state
-        action_preds = self.predict_action(x[:,0])[:, -seq_length:, :]  # predict next action given state
+        value_preds = self.predict_value(x[:,0])[:, -seq_length:, :]  # predict value given state V(s)
+        action_preds = self.predict_action(x[:,0])[:, -seq_length:, :]  # predict next action given state pi(a|s)
         
         if self.args.env_type in ["oc", "lbf"]:
             oppo_action_preds = self.predict_oppo_action(x[:,0])[:, -seq_length:, :]
@@ -311,7 +336,11 @@ class GPTModel(nn.Module):
             oppo_action_preds1 = self.predict_oppo_action1(x[:,0])[:, -seq_length:, :]
             oppo_action_preds2 = self.predict_oppo_action2(x[:,0])[:, -seq_length:, :]
             oppo_action_preds = torch.stack([oppo_action_preds0, oppo_action_preds1, oppo_action_preds2], dim=0).to(dtype=torch.float32, device=action_preds.device)
+        elif self.args.env_type == "Harfang":
+            oppo_action_preds = self.predict_oppo_action(x[:,0])[:, -seq_length:, :]
+            oppo_action_preds = torch.stack([oppo_action_preds], dim=0).to(dtype=torch.float32, device=action_preds.device)
         
+        # pi(a|s), V(s), pi(a_oppo|s)
         return action_preds, value_preds, oppo_action_preds
     
     def load_model(self, param_path, device="cpu"):

@@ -1,8 +1,8 @@
 import numpy as np
-import onnx
+# import onnx
 import torch
 from torch import nn
-import onnxruntime as ort
+# import onnxruntime as ort
 import time
 import os, sys
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
@@ -132,57 +132,57 @@ class Trainer:
         torch.save(self.model.state_dict(), model_path)
         LOG.info(f'Model saved to: {model_path}')
     
-    def save_onnx_model(self, model_path):
-        self.model.eval()
+    # def save_onnx_model(self, model_path):
+    #     self.model.eval()
         
-        BS = 1
-        obs_dim = my_obs_dim_dict[self.args.env_type]
-        act_dim = act_dim_dict[self.args.env_type]
-        oppo_obs_dim = oppo_obs_dim_dict[self.args.env_type]
-        oppo_idxs = self.oppo_idxs
-        K = self.args.history_len
-        PK = self.args.prompt_len*self.args.prompt_epi
+    #     BS = 1
+    #     obs_dim = my_obs_dim_dict[self.args.env_type]
+    #     act_dim = act_dim_dict[self.args.env_type]
+    #     oppo_obs_dim = oppo_obs_dim_dict[self.args.env_type]
+    #     oppo_idxs = self.oppo_idxs
+    #     K = self.args.history_len
+    #     PK = self.args.prompt_len*self.args.prompt_epi
         
-        obs = torch.randn(BS, K, *obs_dim, requires_grad=True)
-        actions = torch.randn(BS, K, act_dim, requires_grad=True)
-        oppo_actions = []
-        for _ in range(len(oppo_idxs)):
-            oppo_actions.append(torch.randn(BS, K, act_dim, requires_grad=True))
-        oppo_actions = torch.stack(oppo_actions, dim=0)
-        returns_to_go = torch.randn(BS, K, 1, requires_grad=True)
-        timesteps = torch.ones(BS, K, dtype=torch.long)
-        attention_mask = torch.ones(BS, K, dtype=torch.long)
-        prompt_states, prompt_actions, prompt_timesteps, prompt_attention_mask = [], [], [], []
-        for _ in range(len(oppo_idxs)):
-            prompt_states.append(torch.randn(BS, PK, *oppo_obs_dim, requires_grad=True))
-            prompt_actions.append(torch.randn(BS, PK, act_dim, requires_grad=True))
-            prompt_timesteps.append(torch.ones(BS, PK, dtype=torch.long))
-            prompt_attention_mask.append(torch.ones(BS, PK, dtype=torch.long))
-        prompt_states, prompt_actions, prompt_timesteps, prompt_attention_mask = \
-            torch.stack(prompt_states, dim=0), torch.stack(prompt_actions, dim=0), torch.stack(prompt_timesteps, dim=0), torch.stack(prompt_attention_mask, dim=0)
-        torch_input = obs.to(device=self.args.device, dtype=torch.float32), actions.to(device=self.args.device, dtype=torch.float32), oppo_actions.to(device=self.args.device, dtype=torch.float32), returns_to_go.to(device=self.args.device, dtype=torch.float32), timesteps.to(device=self.args.device, dtype=torch.long), attention_mask.to(device=self.args.device), prompt_states.to(device=self.args.device, dtype=torch.float32), prompt_actions.to(device=self.args.device, dtype=torch.float32), prompt_timesteps.to(device=self.args.device, dtype=torch.long), prompt_attention_mask.to(device=self.args.device)
+    #     obs = torch.randn(BS, K, *obs_dim, requires_grad=True)
+    #     actions = torch.randn(BS, K, act_dim, requires_grad=True)
+    #     oppo_actions = []
+    #     for _ in range(len(oppo_idxs)):
+    #         oppo_actions.append(torch.randn(BS, K, act_dim, requires_grad=True))
+    #     oppo_actions = torch.stack(oppo_actions, dim=0)
+    #     returns_to_go = torch.randn(BS, K, 1, requires_grad=True)
+    #     timesteps = torch.ones(BS, K, dtype=torch.long)
+    #     attention_mask = torch.ones(BS, K, dtype=torch.long)
+    #     prompt_states, prompt_actions, prompt_timesteps, prompt_attention_mask = [], [], [], []
+    #     for _ in range(len(oppo_idxs)):
+    #         prompt_states.append(torch.randn(BS, PK, *oppo_obs_dim, requires_grad=True))
+    #         prompt_actions.append(torch.randn(BS, PK, act_dim, requires_grad=True))
+    #         prompt_timesteps.append(torch.ones(BS, PK, dtype=torch.long))
+    #         prompt_attention_mask.append(torch.ones(BS, PK, dtype=torch.long))
+    #     prompt_states, prompt_actions, prompt_timesteps, prompt_attention_mask = \
+    #         torch.stack(prompt_states, dim=0), torch.stack(prompt_actions, dim=0), torch.stack(prompt_timesteps, dim=0), torch.stack(prompt_attention_mask, dim=0)
+    #     torch_input = obs.to(device=self.args.device, dtype=torch.float32), actions.to(device=self.args.device, dtype=torch.float32), oppo_actions.to(device=self.args.device, dtype=torch.float32), returns_to_go.to(device=self.args.device, dtype=torch.float32), timesteps.to(device=self.args.device, dtype=torch.long), attention_mask.to(device=self.args.device), prompt_states.to(device=self.args.device, dtype=torch.float32), prompt_actions.to(device=self.args.device, dtype=torch.float32), prompt_timesteps.to(device=self.args.device, dtype=torch.long), prompt_attention_mask.to(device=self.args.device)
         
-        onnx_model_path = f"{model_path}.onnx"
-        torch.onnx.export(
-            model=self.model,
-            args=torch_input,
-            f=onnx_model_path,
-            export_params=True,
-            input_names = ['obs', 'actions', 'oppo_actions', 'returns_to_go', 'timesteps', 'attention_mask', 'prompt_states', 'prompt_actions', 'prompt_timesteps', 'prompt_attention_mask'],
-            output_names = ['action_preds', 'value_preds', 'oppo_action_preds'],
-            dynamic_axes={
-                'obs': {0: 'batch_size', 1:'history_len'},
-                'actions': {0: 'batch_size', 1:'history_len'},
-                'oppo_actions': {0: 'num_oppo', 1:'batch_size', 2:'history_len'},
-                'returns_to_go': {0: 'batch_size', 1:'history_len'},
-                'timesteps': {0: 'batch_size', 1:'history_len'},
-                'attention_mask': {0: 'batch_size', 1:'history_len'},
-                'prompt_states': {0: 'num_oppo', 1:'batch_size', 2:'prompt_len'},
-                'prompt_actions': {0: 'num_oppo', 1:'batch_size', 2:'prompt_len'},
-                'prompt_timesteps': {0: 'num_oppo', 1:'batch_size', 2:'prompt_len'},
-                'prompt_attention_mask': {0: 'num_oppo', 1:'batch_size', 2:'prompt_len'},
-                'action_preds': {0: 'batch_size', 1:'history_len'},
-                'value_preds': {0: 'batch_size', 1:'history_len'},
-                'oppo_action_preds': {0: 'num_oppo', 1:'batch_size', 2:'history_len'},
-            }
-        )
+    #     onnx_model_path = f"{model_path}.onnx"
+    #     torch.onnx.export(
+    #         model=self.model,
+    #         args=torch_input,
+    #         f=onnx_model_path,
+    #         export_params=True,
+    #         input_names = ['obs', 'actions', 'oppo_actions', 'returns_to_go', 'timesteps', 'attention_mask', 'prompt_states', 'prompt_actions', 'prompt_timesteps', 'prompt_attention_mask'],
+    #         output_names = ['action_preds', 'value_preds', 'oppo_action_preds'],
+    #         dynamic_axes={
+    #             'obs': {0: 'batch_size', 1:'history_len'},
+    #             'actions': {0: 'batch_size', 1:'history_len'},
+    #             'oppo_actions': {0: 'num_oppo', 1:'batch_size', 2:'history_len'},
+    #             'returns_to_go': {0: 'batch_size', 1:'history_len'},
+    #             'timesteps': {0: 'batch_size', 1:'history_len'},
+    #             'attention_mask': {0: 'batch_size', 1:'history_len'},
+    #             'prompt_states': {0: 'num_oppo', 1:'batch_size', 2:'prompt_len'},
+    #             'prompt_actions': {0: 'num_oppo', 1:'batch_size', 2:'prompt_len'},
+    #             'prompt_timesteps': {0: 'num_oppo', 1:'batch_size', 2:'prompt_len'},
+    #             'prompt_attention_mask': {0: 'num_oppo', 1:'batch_size', 2:'prompt_len'},
+    #             'action_preds': {0: 'batch_size', 1:'history_len'},
+    #             'value_preds': {0: 'batch_size', 1:'history_len'},
+    #             'oppo_action_preds': {0: 'num_oppo', 1:'batch_size', 2:'history_len'},
+    #         }
+    #     )

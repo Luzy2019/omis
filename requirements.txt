@@ -1,6 +1,6 @@
 # python 3.8.*
 # --------------- important ---------------
-torch  # recommend 2.x
+# torch  # recommend 2.x
 nvidia-pyindex
 nvidia-tensorflow  # very tricky to install, but necessary
 onnx

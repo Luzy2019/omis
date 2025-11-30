@@ -1,5 +1,5 @@
 import json
-import hirl.environments.socket_lib as socket_lib
+import envs.HarfangEnv_GYM.socket_lib as socket_lib
 
 
 def connect(_host, _port):

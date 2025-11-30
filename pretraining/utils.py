@@ -4,15 +4,16 @@ sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import re
 # import gym
 import copy
-import onnx
-import onnxruntime as ort
+# import onnx
+# import onnxruntime as ort
 import tqdm
 import random
 import numpy as np
-from scipy.special import softmax
+# from scipy.special import softmax
 import torch
 from torch import nn
 from torch.nn import functional as F
+from pretraining.utils2 import load_pickle
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)s: %(message)s',
@@ -39,54 +40,63 @@ my_index_dict = {
     "oc": [0],
     "lbf": [0],
     "pp": [3],
+    "Harfang": [0],
 }
 
 opponent_index_dict = {
     "oc": [1],
     "lbf": [1],
     "pp": [0,1,2],
+    "Harfang": [1],
 }
 
 my_obs_dim_dict = {
     "oc": (5, 4, 20),
     "lbf": (21,),
     "pp": (14,),
+    "Harfang": (13,),
 }
 
 oppo_obs_dim_dict = {
     "oc": (5, 4, 20),
     "lbf": (21,),
     "pp": (16,),
+    "Harfang": (6,),
 }
 
 act_dim_dict = {
     "oc": 6,
     "lbf": 6,
     "pp": 5,
+    "Harfang": 4,
 }
 
 horizon_per_ep_dict = {
     "oc": 400,
     "lbf": 50,
     "pp": 100,
+    "Harfang": 4000,
 }
 
 reward_scale_dict = {
     "oc": 100.,
     "lbf": 1.,
     "pp": 100.,
+    "Harfang": 100.,
 }
 
 PBT_DATA_DIR = {
     "oc": os.path.join(os.path.dirname(os.path.abspath(__file__)), "../envs/overcooked_ai_envs/models/"),
     "lbf": os.path.join(os.path.dirname(os.path.abspath(__file__)), "../envs/lb_foraging_envs/models/"),
     "pp": os.path.join(os.path.dirname(os.path.abspath(__file__)), "../envs/multiagent_particle_envs/models/"),
+    "Harfang": None,
 }
 
 pbt_model_paths = {
     "oc": "pbt_simple",
     "lbf": "pbt_lbf",
     "pp": "pbt_st",
+    "Harfang": None,
 }
 
 oc_env_params = {
@@ -497,6 +507,7 @@ def get_prompt(prompt_dataset, args):
     prompt_epi = args.prompt_epi
     device = args.device
     oppo_idxs = opponent_index_dict[args.env_type]
+    
     def fn(batch_size=1, oppo_pi_idx=0, max_steps=max_steps, max_len=K):
         o, a, timesteps, mask = {idx:[] for idx in oppo_idxs} , {idx:[] for idx in oppo_idxs}, {idx:[] for idx in oppo_idxs}, {idx:[] for idx in oppo_idxs}
         batch_inds = np.random.choice(
@@ -825,6 +836,7 @@ class AgentGroupObs(object):
         self.n = len(self.agents)
 
     def joint_action(self, obs):
+        # 调用每个智能体(pi)，用对应的观测(obs[i])，返回联合动作
         return tuple(pi(obs[i]) for i, pi in enumerate(self.agents))
 
 def run_agents(env, env_type, agent_group, agent_idx, include_final_state):

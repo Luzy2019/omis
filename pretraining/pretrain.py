@@ -15,10 +15,13 @@ def main(args):
     # * set the result and model dir
     group_name = f'{args.env_type}/ours-{args.exp_id}'
     exp_name = f'{group_name}/seed{args.seed}'
+
     args.seed_model_dir = args.model_dir + f"{exp_name}/"
     create_dir_if_not_exists(args.seed_model_dir)
+
     args.seed_result_dir = args.result_dir + f"{exp_name}/"
     create_dir_if_not_exists(args.seed_result_dir)
+
     args.seed_loss_path = args.seed_result_dir + "loss.csv"
     with open(args.seed_loss_path, 'w') as f:
         f.write("train_step,action_loss,value_loss,oppo_pi_loss\n")
@@ -27,6 +30,7 @@ def main(args):
     dataset = load_dataset(args)
     prompt_dataset = load_dataset(args, prompt=True)
     LOG.info("Finish loading dataset.")
+    
     get_prompt_batch_fn = get_prompt_batch(dataset, prompt_dataset, args)
     get_prompt_fn = get_prompt(prompt_dataset, args)
     # * initialize the model
@@ -55,7 +59,7 @@ def main(args):
         if i % args.ckpt_freq == 0 or i == args.num_iter-1:
             model_path = args.seed_model_dir+f"model_iter_{i}"
             trainer.save_model(model_path)
-            trainer.save_onnx_model(model_path)
+            # trainer.save_onnx_model(model_path)
             LOG.info(f"iter [{i}]: finish * saving model *")
     LOG.info(f"Finish pretraining.")
 
@@ -99,13 +103,4 @@ if __name__ == "__main__":
     
     args = argparser.parse_args()
     
-    NUM_RUN = 5
-    ctx = mp.get_context('spawn')
-    subproc = []
-    for i in range(NUM_RUN):
-        args.seed = i
-        p = ctx.Process(target=main, args=(args,))
-        p.start()
-        subproc.append(p)
-    for p in subproc:
-        p.join()
+    main(args)

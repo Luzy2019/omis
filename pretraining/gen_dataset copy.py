@@ -20,8 +20,6 @@ from pretraining.utils2 import load_dict_from_txt, save_pickle
 from pretraining.utils import (
     LOG,
     PBT_DATA_DIR,
-    my_index_dict,
-    train_opponent_index,
     pbt_model_paths,
     AgentGroupObs,
     get_rollouts,
@@ -48,7 +46,7 @@ def main(args):
     if args.env_type == "Harfang":
         env = HarfangEnv()
     
-    # save_dir = f"models/{args.env_type}/"
+    save_dir = f"models/{args.env_type}/"
     my_policies = [RLPolicy(args.env_type, save_dir + f"pi{i}/seed{i}/params_50000.pt", args.device) for i in range(len(test_oppo_policy))]
 
     # * generate the dataset
