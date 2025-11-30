@@ -64,7 +64,7 @@ cd ../testing
 python test.py
 ```
 
-Additionally, pretrained model weight files are available at `pretraining/models/sl`.
+Additionally, pretrained model weight files are available at `pretraining/models`.
 
 ## Remark
 The opponent policies are trained using the codes of [maximum_entropy_population_based_training](https://github.com/ruizhaogit/maximum_entropy_population_based_training). The code for the Predator Prey (PP) environment is based on [Multi-Agent Particle Environments (MPE)](https://github.com/openai/multiagent-particle-envs). The code for the Level-Based Foraging (LBF) environment is based on [lb-foraging](https://github.com/semitable/lb-foraging/tree/master). The code for the OverCooked (OC) environment is based on [overcooked_ai](https://github.com/HumanCompatibleAI/overcooked_ai).

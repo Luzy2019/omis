@@ -33,11 +33,13 @@ def main(args):
     
     get_prompt_batch_fn = get_prompt_batch(dataset, prompt_dataset, args)
     get_prompt_fn = get_prompt(prompt_dataset, args)
+
     # * initialize the model
     model = GPTModel(args=args)
     model = model.to(device=args.device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda steps: min((steps + 1) / args.warmup_steps, 1))
+
     # * initialize the trainer
     trainer = Trainer(
         model=model,
@@ -49,6 +51,7 @@ def main(args):
         value_loss_fn=MeanSquareError,
         args=args,
     )
+    
     # * train and save the model
     LOG.info("Start pretraining.")
     for i in range(args.num_iter):
@@ -66,20 +69,18 @@ def main(args):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("--env_type", type=str, default="oc", choices=["oc", "lbf", "pp"])
+    argparser.add_argument("--env_type", type=str, default="Harfang", choices=["oc", "lbf", "pp","Harfang"])
     argparser.add_argument("--exp_id", type=str, default="v0")
     argparser.add_argument("--device", type=str, default="cuda:0")
     argparser.add_argument("--load_data_path", type=str, default="data/oc_sp_r1000_v0")
-    # argparser.add_argument("--load_data_path", type=str, default="data/lbf_br_r1000_v0")
-    # argparser.add_argument("--load_data_path", type=str, default="data/st_br_r1000_v0")
-    argparser.add_argument("--seed", type=int)
+    argparser.add_argument("--seed", type=int, default=0)
     
-    argparser.add_argument("--num_iter", type=int, default=4000)
-    argparser.add_argument("--ckpt_freq", type=int, default=80)
-    argparser.add_argument("--num_update", type=int, default=10)
+    argparser.add_argument("--num_iter", type=int, default=200)
+    argparser.add_argument("--ckpt_freq", type=int, default=100)
+    argparser.add_argument("--num_update", type=int, default=20)
     argparser.add_argument("--vf_coef", type=float, default=0.5)
     argparser.add_argument("--oppo_pi_coef", type=float, default=0.8)
-    argparser.add_argument("--batch_size", type=int, default=64)
+    argparser.add_argument("--batch_size", type=int, default=16)
     argparser.add_argument("--learning_rate", type=float, default=6e-4)
     argparser.add_argument("--weight_decay", type=float, default=1e-4)
     argparser.add_argument("--warmup_steps", type=int, default=1e4)
@@ -98,9 +99,11 @@ if __name__ == "__main__":
     argparser.add_argument("--clip_grad", type=float, default=0.5)
     argparser.add_argument("--action_tanh", type=bool, default=False)
     
-    argparser.add_argument("--result_dir", type=str, default="results/sl/")
-    argparser.add_argument("--model_dir", type=str, default="models/sl/")
+    argparser.add_argument("--result_dir", type=str, default="pretraining/results/")
+    argparser.add_argument("--model_dir", type=str, default="pretraining/models/")
     
     args = argparser.parse_args()
     
     main(args)
+
+    # python pretraining/pretrain.py --load_data_path pretraining/data/Harfang_seen_r100_v2.pickle --exp_id v2

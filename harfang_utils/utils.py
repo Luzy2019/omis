@@ -51,11 +51,14 @@ def get_rollouts_harfang(env, env_type, agent_group, num_games, agent_idx, final
         success, state_list, action_list, reward_list, done_list, time_taken, tot_rews_sparse = run_agents_harfang(env, env_type, agent_group, agent_idx, include_final_state=final_state, plane_id=plane_id)
         if not success:
             continue
-        obs, actions, rews, dones = state_list.T, action_list.T, reward_list.T, done_list.T
+        # obs, actions, rews, dones = state_list.T, action_list.T, reward_list.T, done_list.T
+        obs, actions, rews, dones = state_list, action_list, reward_list, done_list
+
         trajectories["ep_observations"].append(obs)
         trajectories["ep_actions"].append(actions)
         trajectories["ep_rewards"].append(rews)
         trajectories["ep_dones"].append(dones)
+
         trajectories["ep_returns"].append(tot_rews_sparse)
         trajectories["ep_returns_sparse"].append(tot_rews_sparse)
         trajectories["ep_lengths"].append(time_taken)
@@ -63,17 +66,18 @@ def get_rollouts_harfang(env, env_type, agent_group, num_games, agent_idx, final
     df.set_client_update_mode(False)
     df.disconnect()
 
-    trajectories = {k: np.array(v) for k, v in trajectories.items()}
-    return trajectories
-    # trajectories_converted = {}
-    # for k, v in trajectories.items():
-    #     if k in ["ep_observations", "ep_actions", "ep_rewards", "ep_dones"]:
-    #         # 这些列表包含不同长度的轨迹，需要使用 dtype=object
-    #         trajectories_converted[k] = np.array(v, dtype=object)
-    #     else:
-    #         # 标量值可以直接转换
-    #         trajectories_converted[k] = np.array(v)
-    # return trajectories_converted
+    # trajectories = {k: np.array(v) for k, v in trajectories.items()}
+    # return trajectories
+
+    trajectories_converted = {}
+    for k, v in trajectories.items():
+        if k in ["ep_observations", "ep_actions", "ep_rewards", "ep_dones"]:
+            # 这些列表包含不同长度的轨迹，需要使用 dtype=object
+            trajectories_converted[k] = np.array(v, dtype=object)
+        else:
+            # 标量值可以直接转换
+            trajectories_converted[k] = np.array(v)
+    return trajectories_converted
 
 
 def run_agents_harfang(env, env_type, agent_group, agent_idx, include_final_state, **args):
@@ -170,19 +174,22 @@ def run_agents_harfang(env, env_type, agent_group, agent_idx, include_final_stat
         cumulative_sparse_rewards[0] += reward
         
         if episode_step > 4000:
-            state_list.append(agent_state)
-            action_list.append(agent_action)
-            reward_list.append(reward)
-            done_list.append(True)
             done = True
-        else:
-            state_list.append(agent_state)
-            action_list.append(agent_action)
-            reward_list.append(reward)
-            done_list.append(False)
-            done = False
+
+        state_list.append(uni_state)
+        action_list.append(uni_action)
+        reward_list.append(reward)
+        done_list.append(done)
     
+    if len(done_list) > 0:
+        done_list[len(done_list) - 1] = True
+
+    _final_state_list = np.array(state_list, dtype=object)
+    _final_action_list = np.array(action_list)
+    _final_reward_list = np.array(reward_list)
+    _final_done_list = np.array(done_list)
+        
     if episode_step > 4000 or fire - lock > 20 or fire - lock < 0:
-            return False, np.array(state_list), np.array(action_list), np.array(reward_list), np.array(done_list), None, None
+            return False, _final_state_list, _final_action_list, _final_reward_list, _final_done_list, None, None
     else:
-        return True, np.array(state_list), np.array(action_list), np.array(reward_list), np.array(done_list), t, np.array(cumulative_sparse_rewards)
+        return True, _final_state_list, _final_action_list, _final_reward_list, _final_done_list, episode_step, np.array(cumulative_sparse_rewards)

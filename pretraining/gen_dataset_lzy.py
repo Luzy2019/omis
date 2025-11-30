@@ -16,7 +16,7 @@ from harfang_utils.utils import get_rollouts_harfang
 
 def main(args):
     # * set the seed
-    # set_global_seed(args.seed, with_tf=False)
+    # set_global_seed(args.seed)
     # * initialize the envs
     # pbt_save_dir = PBT_DATA_DIR[args.env_type] + pbt_model_paths[args.env_type] + "/"
     # pbt_config = load_dict_from_txt(pbt_save_dir + "config")
@@ -39,13 +39,13 @@ def main(args):
     if env_type == "Harfang":
         env = None
     
-    # save_dir = f"pretraining/models/{env_type}/{data_type}/"
+    # save_dir = f"models/{env_type}/"
     # my_policies = [
     #     RLPolicy(env_type, save_dir + f"pi{i}/model.pt", args.device) for i in range(len(test_oppo_policy))
     # ]
 
     # * generate the dataset
-    # agent_idxs = my_index_dict[args.env_type]
+    # agent_idxs = my_index_dict[env_type]
     if env_type == "Harfang":
         agent_idxs = CONFIG.AGENT_INDEX
         oppo_idxs = CONFIG.OPPO_INDEX
@@ -53,35 +53,28 @@ def main(args):
     result_dict = {}
     for i in tqdm(range(len(test_oppo_policy)), desc="oppo_pi"):
         i_name = f"oppo_policy_{test_oppo_policy[i]}"
-        result_dict_ = dict()
-        for j in tqdm(range(len(agent_idxs)), desc="agent_pi"):
-            if env_type == "Harfang":
-                agent_group = AgentGroupObs(agent_idxs[j], test_oppo_policy[i], sim_threads=0)
-                r_dict = get_rollouts_harfang(env, env_type, agent_group, num_rounds // len(test_oppo_policy), agent_idx=agent_idxs)
-            avg_ep_returns = np.mean(np.stack(r_dict['ep_returns'], axis=0), axis=0)
-            
-            LOG.info(f"Test type: {data_type}; Opponent: [{test_oppo_policy[i]}]; avg returns result: {avg_ep_returns}")
-            if result_dict_ == dict():
-                result_dict_ = r_dict
-            else:
-                for k, v in result_dict_.items():
-                    result_dict_[k] = np.concatenate((v, r_dict[k]), axis=0)
-        result_dict[i_name] = result_dict_
+        if env_type == "Harfang":
+            agent_group = AgentGroupObs(agent_idxs[i], test_oppo_policy[i], sim_threads=0)
+            r_dict = get_rollouts_harfang(env, env_type, agent_group, num_rounds // len(test_oppo_policy), agent_idx=agent_idxs)
+        avg_ep_returns = np.mean(np.stack(r_dict['ep_returns'], axis=0), axis=0)
+        
+        LOG.info(f"Test type: {data_type}; Opponent: [{test_oppo_policy[i]}]; avg returns result: {avg_ep_returns}")
+        result_dict[i_name] = r_dict
     
-    if not os.path.exists(f"pretraining/prompt/"):
-        os.makedirs(f"pretraining/prompt/")
-    save_pickle(result_dict, f"pretraining/prompt/{env_type}_{data_type}_r{num_rounds}_{exp_id}")
+    if not os.path.exists(f"pretraining/data/"):
+        os.makedirs(f"pretraining/data/")
+    save_pickle(result_dict, f"pretraining/data/{env_type}_{data_type}_r{num_rounds}_{exp_id}")
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("--env_type", type=str, default="Harfang", choices=["oc", "lbf", "pp","Harfang"])
+    argparser.add_argument("--env_type", type=str, default="Harfang", choices=["oc", "lbf", "pp", "Harfang"])
     argparser.add_argument("--data_type", type=str, default="seen", choices=["seen", "unseen", "mixed"])
     argparser.add_argument("--seed", type=int, default=0)
     argparser.add_argument("--device", type=str, default="cuda:0")
     argparser.add_argument("--exp_id", type=str, default="v2")
     argparser.add_argument("--num_rounds", type=int, default=100)
-    
     args = argparser.parse_args()
 
     # args.exp_id = time.strftime("%Y%m%d%H%M%S", time.localtime())
+
     main(args)

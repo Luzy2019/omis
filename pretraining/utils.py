@@ -34,20 +34,18 @@ test_opponent_index = [
     (s, idx) for idx in opponent_population_agent_index for s in opponent_population_seed[2:4]
 ]
 
-print(train_opponent_index)
-
 my_index_dict = {
     "oc": [0],
     "lbf": [0],
     "pp": [3],
-    "Harfang": [0],
+    "Harfang": [1],
 }
 
 opponent_index_dict = {
     "oc": [1],
     "lbf": [1],
     "pp": [0,1,2],
-    "Harfang": [1],
+    "Harfang": [0],
 }
 
 my_obs_dim_dict = {
@@ -498,7 +496,7 @@ def discount_cumsum(x, gamma):
         discount_cumsum[t] = x[t] + gamma * discount_cumsum[t + 1]
     return discount_cumsum
 
-
+# prompt_dataset.shape(num_oppo_policy, num_rounds, oppo_or_agent_idx, keys)
 def get_prompt(prompt_dataset, args):
     oppo_obs_dim = oppo_obs_dim_dict[args.env_type]
     act_dim = act_dim_dict[args.env_type]
@@ -507,7 +505,7 @@ def get_prompt(prompt_dataset, args):
     prompt_epi = args.prompt_epi
     device = args.device
     oppo_idxs = opponent_index_dict[args.env_type]
-    
+
     def fn(batch_size=1, oppo_pi_idx=0, max_steps=max_steps, max_len=K):
         o, a, timesteps, mask = {idx:[] for idx in oppo_idxs} , {idx:[] for idx in oppo_idxs}, {idx:[] for idx in oppo_idxs}, {idx:[] for idx in oppo_idxs}
         batch_inds = np.random.choice(
@@ -515,26 +513,46 @@ def get_prompt(prompt_dataset, args):
             size=(prompt_epi*batch_size),
             replace=False,
         )
-        for k in range((prompt_epi*batch_size)):
-            traj = prompt_dataset[oppo_pi_idx][batch_inds[k]]
+        for k in range((prompt_epi * batch_size)):
+            traj = prompt_dataset[oppo_pi_idx][batch_inds[k]] # 从数据集中采样一个指定对手策略的trajectory
             for idx in oppo_idxs:
-                si = np.random.randint(0, traj[idx]['act'].shape[0])
-                o[idx].append(traj[idx]['obs'][si:si + max_len].reshape(1, -1, *oppo_obs_dim))
-                a[idx].append(traj[idx]['act'][si:si + max_len].reshape(1, -1, act_dim))
-                timesteps[idx].append(np.arange(si, si + o[idx][-1].shape[1]).reshape(1, -1))
-                timesteps[idx][-1][timesteps[idx][-1] >= max_steps] = max_steps - 1  # padding cutoff
 
+                # 从当前idx对应的agent的trajectory中，随机选一个step的起点
+                si = np.random.randint(0, traj[idx]['act'].shape[0]) # traj[idx]['act'].shape[0] 3096
+                
+                # obs: 采样窗口，shape = (1, T, obs_dim)
+                o[idx].append(traj[idx]['obs'][si:si + max_len].reshape(1, -1, *oppo_obs_dim))
+
+                # act: 采样窗口，shape = (1, T, act_dim)
+                a[idx].append(traj[idx]['act'][si:si + max_len].reshape(1, -1, act_dim))
+
+                # timestep: 采样窗口的时间步
+                timesteps[idx].append(np.arange(si, si + o[idx][-1].shape[1]).reshape(1, -1))
+                timesteps[idx][-1][timesteps[idx][-1] >= max_steps] = max_steps - 1  # 超过episode长度的时间步进行裁剪
+
+                # 当前采样片段长度
                 tlen = o[idx][-1].shape[1] # timestep length
 
+                # obs左侧pad 0，以补齐长度为max_len
                 o[idx][-1] = np.concatenate([np.zeros((1, max_len - tlen, *oppo_obs_dim)), o[idx][-1]], axis=1)
+                # act左侧pad -10，以补齐长度为max_len
                 a[idx][-1] = np.concatenate([np.ones((1, max_len - tlen, act_dim)) * -10., a[idx][-1]], axis=1)
+                # timestep左侧pad 0
                 timesteps[idx][-1] = np.concatenate([np.zeros((1, max_len - tlen)), timesteps[idx][-1]], axis=1)
+                # mask: 有效长度用1标记，其余pad部分为0
                 mask[idx].append(np.concatenate([np.zeros((1, max_len - tlen)), np.ones((1, tlen))], axis=1))
+
         for idx in oppo_idxs:
             o[idx] = torch.from_numpy(np.concatenate(o[idx], axis=0)).to(dtype=torch.float32, device=device)
             a[idx] = torch.from_numpy(np.concatenate(a[idx], axis=0)).to(dtype=torch.float32, device=device)
             timesteps[idx] = torch.from_numpy(np.concatenate(timesteps[idx], axis=0)).to(dtype=torch.long, device=device)
             mask[idx] = torch.from_numpy(np.concatenate(mask[idx], axis=0)).to(device=device)
+            
+            # o[idx] = np.concatenate(o[idx], axis=0)
+            # a[idx] = np.concatenate(a[idx], axis=0)
+            # timesteps[idx] = np.concatenate(timesteps[idx], axis=0)
+            # mask[idx] = np.concatenate(mask[idx], axis=0)
+
         return o, a, timesteps, mask
 
     return fn
@@ -641,6 +659,7 @@ def load_dataset(args, prompt=False):
     num_oppo_policy = len(data_dict.keys())
     if not prompt:
         args.num_oppo_policy = num_oppo_policy
+        
     my_idxs = my_index_dict[args.env_type]
     oppo_idxs = opponent_index_dict[args.env_type]
     returns_against_adv_list = [[] for _ in range(num_oppo_policy)]

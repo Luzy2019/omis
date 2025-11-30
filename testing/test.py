@@ -37,7 +37,7 @@ def main(args):
 
     # * initialize the model
     if args.load_model_path == "":
-        base_dir = "../pretraining/models/sl/"
+        base_dir = "../pretraining/models/"
         args.load_model_path = base_dir + f"{args.env_type}/ours-{args.load_exp_id}/seed{args.seed}/model_iter_{args.load_iter}"
     my_model = get_my_trt_model(args)
 
